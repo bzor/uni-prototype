@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Unisphere</title>
+	<link rel="stylesheet" href="style.css">
+  <script type="module" crossorigin src="/uni-prototype/assets/index-CDE8c9Fm.js"></script>
+</head>
+
+<body>
+	<div class="container">
+		<div class="left-panel">
+			<div class="control-group">
+				<label for="apiKey">API Key: <a target="_blank" href="https://aistudio.google.com/app/api-keys">(Get
+						your key here)</a></label>
+				<input type="password" id="apiKey" placeholder="Enter your API key">
+			</div>
+			<div class="button-group">
+				<button id="connect-btn" class="btn-primary">Connect</button>
+				<button id="disconnect-btn" class="btn-secondary" disabled>Disconnect</button>
+			</div>
+			<div id="status" class="status"></div>
+		</div>
+
+		<div class="right-panel">
+			<div class="mic-percept-output">
+				<p>Mic Percept Log</p>
+				<div id="mic-percept-log" class="log"></div>
+			</div>
+		</div>
+	</div>
+
+</body>
+
+</html>
