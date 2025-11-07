@@ -1,0 +1,24 @@
+{
+  "name": "uni-prototype",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "host": "vite preview --outDir host",
+    "build:cam": "vite build --config vite.config.cam.js",
+    "build:cam-vis": "vite build --config vite.config.cam-vis.js",
+    "build:mic": "vite build --config vite.config.mic.js",
+    "build:mic-vis": "vite build --config vite.config.mic-vis.js",
+    "deploy": "npm run build && node deploy.js"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "@google/genai": "^1.28.0",
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
+    "face-api.js": "^0.22.2"
+  }
+}
