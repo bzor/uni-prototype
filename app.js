@@ -7,8 +7,6 @@ import { MicVis } from './mic-vis.js';
 import { LightingVis } from './lighting-vis.js';
 import { KineticVis } from './kinetic-vis.js';
 
-const API_KEY = 'AIzaSyDJgLvyHQHXvUv-2aNXdtdric1r38I9WtM';
-
 const camOutput = document.getElementById('cam-output');
 const micOutput = document.getElementById('mic-output');
 const micVisContainer = document.getElementById('mic-vis-inner');
