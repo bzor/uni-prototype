@@ -31912,7 +31912,7 @@ class VN {
       emojiRemove: /Emoji:\s*.*/i
     }, this.reusablePartsArray = [];
   }
-  init(e) {
+  async init(e) {
     const { apiKey: t, httpOptions: r } = e, o = t.startsWith("auth_tokens/"), i = o ? "v1alpha" : (r == null ? void 0 : r.apiVersion) || "v1beta";
     this.verboseLogging && console.log(`[CAM] API Version: ${i}`);
     const a = {
@@ -31923,7 +31923,7 @@ class VN {
       this.handleChangeEvent("face");
     }), this.addEventListener("skeletonchanged", (s) => {
       this.handleChangeEvent("skeleton");
-    }), this.startWebcam();
+    }), await this.startWebcam();
   }
   start() {
     if (!this.pendingApiKey) {
@@ -31967,9 +31967,20 @@ Remember: Return ONLY the JSON object. No other text.`
         model: this.model,
         callbacks: {
           onopen: () => {
-            this.verboseLogging && console.log("[CAM.GEMINI] Connected to Gemini Live"), e && (localStorage.setItem("apiKey", e), this.verboseLogging && console.log("[STORAGE] Saved API key to localStorage")), setTimeout(() => {
-              this.setupComplete = !0, this.video && (this.isRecording = !0, this.verboseLogging && console.log("[CAM] Ready to send frames to Gemini on face/skeleton changes"));
-            }, 500);
+            this.verboseLogging && console.log("[CAM.GEMINI] Connected to Gemini Live"), e && (localStorage.setItem("apiKey", e), this.verboseLogging && console.log("[STORAGE] Saved API key to localStorage")), this.waitForVideoReady().then(() => {
+              this.setupComplete = !0, this.verboseLogging && console.log("[CAM] SETUP COMPLETE"), this.video ? (this.isRecording = !0, this.verboseLogging && console.log("[CAM] Ready to send frames to Gemini on face/skeleton changes")) : console.error("[CAM] RACE CONDITION: NO VIDEO after waitForVideoReady() succeeded", {
+                videoExists: !!this.video,
+                setupComplete: this.setupComplete,
+                mediaStreamExists: !!this.mediaStream
+              });
+            }).catch((o) => {
+              console.error("[CAM] RACE CONDITION: Error waiting for video:", o.message, {
+                error: o,
+                videoExists: !!this.video,
+                mediaStreamExists: !!this.mediaStream,
+                setupComplete: this.setupComplete
+              });
+            });
           },
           onmessage: async (o) => {
             this.verboseLogging && console.log("[CAM.GEMINI] Message received:", o), this.handleGeminiResponse(o);
@@ -32182,6 +32193,35 @@ Remember: Return ONLY the JSON object. No other text.`
   // Set verbose logging flag
   setVerboseLogging(e) {
     this.verboseLogging = e;
+  }
+  // Wait for video to be ready before enabling recording
+  async waitForVideoReady() {
+    var i, a, s, u, l, c, f;
+    const r = Date.now();
+    for (console.log("[CAM] Waiting for video to be ready...", {
+      videoExists: !!this.video,
+      videoReadyState: (i = this.video) == null ? void 0 : i.readyState,
+      videoWidth: (a = this.video) == null ? void 0 : a.videoWidth,
+      videoHeight: (s = this.video) == null ? void 0 : s.videoHeight
+    }); Date.now() - r < 5e3; ) {
+      if (this.video && this.video.readyState >= this.video.HAVE_METADATA && this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+        this.verboseLogging && console.log("[CAM] Video is ready");
+        return;
+      }
+      await new Promise((d) => setTimeout(d, 100));
+    }
+    const o = Date.now() - r;
+    throw console.error("[CAM] RACE CONDITION: Video not ready within timeout period", {
+      elapsedMs: o,
+      videoExists: !!this.video,
+      videoReadyState: (u = this.video) == null ? void 0 : u.readyState,
+      videoWidth: (l = this.video) == null ? void 0 : l.videoWidth,
+      videoHeight: (c = this.video) == null ? void 0 : c.videoHeight,
+      mediaStreamExists: !!this.mediaStream,
+      mediaStreamActive: (f = this.mediaStream) == null ? void 0 : f.active,
+      setupComplete: this.setupComplete,
+      isRecording: this.isRecording
+    }), new Error("Video not ready within timeout period");
   }
   disconnect() {
     this.faceProcessingInterval && (clearTimeout(this.faceProcessingInterval), this.faceProcessingInterval = null), this.mediaStream && (this.mediaStream.getTracks().forEach((e) => e.stop()), this.mediaStream = null), this.video && (this.video.pause(), this.video.srcObject = null, this.video = null), this.canvas && (this.canvas = null, this.ctx = null), this.session && (this.session.close(), this.session = null), this.client = null, this.face && (this.face.disconnect(), this.face = null), this.skeletal && (this.skeletal.disconnect(), this.skeletal = null), this.isRecording = !1, this.setupComplete = !1, this.accumulatedTextParts.length = 0, this.currentTurnActive = !1, this.frameCount = 0, this.pendingFrames.length = 0, this.lastFrameSendTime = 0;

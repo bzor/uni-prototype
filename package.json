@@ -11,6 +11,8 @@
     "build:cam-vis": "vite build --config vite.config.cam-vis.js",
     "build:mic": "vite build --config vite.config.mic.js",
     "build:mic-vis": "vite build --config vite.config.mic-vis.js",
+    "build:lighting-vis": "vite build --config vite.config.lighting-vis.js",
+    "build:kinetic-vis": "vite build --config vite.config.kinetic-vis.js",
     "deploy": "npm run build && node deploy.js"
   },
   "devDependencies": {

@@ -7,6 +7,8 @@ import { MicVis } from './mic-vis.js';
 import { LightingVis } from './lighting-vis.js';
 import { KineticVis } from './kinetic-vis.js';
 
+const API_KEY = 'AIzaSyCp0Kwq06iQviKP81vfQLZAhouLCPU0eGk';
+
 const camOutput = document.getElementById('cam-output');
 const micOutput = document.getElementById('mic-output');
 const micVisContainer = document.getElementById('mic-vis-inner');
@@ -69,3 +71,23 @@ document.addEventListener('keydown', (event) => {
 		}
 	}
 });
+
+//test lighting and kinetics
+const testLightingAnimation = () => {
+	const delay = 3000 + Math.random() * 2000; // 3-5 seconds
+	setTimeout(() => {
+		const randomColor = Math.floor(Math.random() * 0xffffff);
+		const randomSpeed = (Math.random() * 2) - 1; // -1 to 1
+		const randomLightingPattern = lightingVis.patternOptions[Math.floor(Math.random() * lightingVis.patternOptions.length)];
+		const randomKineticPattern = kineticVis.patternOptions[Math.floor(Math.random() * kineticVis.patternOptions.length)];
+		
+		//console.log(`[TEST] Setting lighting animation: color=0x${randomColor.toString(16)}, speed=${randomSpeed.toFixed(2)}, pattern=${randomLightingPattern}, kineticPattern=${randomKineticPattern}`);
+		lightingVis.setAnimation(randomColor, randomLightingPattern, randomSpeed);
+		kineticVis.setPatternStr("JIGGLE");
+		
+		// Continue the loop
+		testLightingAnimation();
+	}, delay);
+};
+
+testLightingAnimation();

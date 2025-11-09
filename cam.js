@@ -33,7 +33,7 @@ export class Cam {
 		this.cooldownMs = 2000; // 1 second cooldown between frame sends
 		this.lastFrameSendTime = 0; // Timestamp of last frame send
 		this.verboseLogging = false; // Verbose logging flag
-		
+
 		// Stored config for delayed connection
 		this.pendingApiKey = null;
 		this.pendingHttpOptions = null;
@@ -55,59 +55,59 @@ export class Cam {
 		this.reusablePartsArray = [];
 	}
 
-	init(config) {
+	async init(config) {
 		const { apiKey, httpOptions } = config;
 		const isEphemeralToken = apiKey.startsWith('auth_tokens/');
-		
+
 		// Ephemeral tokens require v1alpha, regular keys can use v1beta
-		const apiVersion = isEphemeralToken 
+		const apiVersion = isEphemeralToken
 			? 'v1alpha'  // Ephemeral tokens MUST use v1alpha
 			: (httpOptions?.apiVersion || 'v1beta');  // Regular keys default to v1beta
 
 		if (this.verboseLogging) {
 			console.log(`[CAM] API Version: ${apiVersion}`);
 		}
-		
+
 		// Build httpOptions with correct API version
 		const finalHttpOptions = {
 			...httpOptions,
 			apiVersion: apiVersion
 		};
-		
+
 		// Warn if ephemeral token used without v1alpha
 		if (isEphemeralToken && apiVersion !== 'v1alpha') {
 			if (this.verboseLogging) {
 				console.warn('[CAM] Warning: Ephemeral tokens require v1alpha API version');
 			}
 		}
-		
+
 		// Store config but don't connect yet - wait for explicit start() call
 		this.pendingApiKey = apiKey;
 		this.pendingHttpOptions = finalHttpOptions;
 		if (this.verboseLogging) {
 			console.log('[CAM] Config stored. Call start() to connect to Gemini API.');
 		}
-		
+
 		// Create canvas for video frame capture (needed for visualization and later for Gemini)
 		this.canvas = document.createElement('canvas');
 		this.ctx = this.canvas.getContext('2d');
-		
+
 		// Initialize face recognition module immediately (doesn't require Gemini API)
 		this.face = new CamFace();
 		this.face.init(this);
-		
+
 		// Listen for face change events - trigger frame send
 		this.addEventListener('facechanged', (event) => {
 			this.handleChangeEvent('face');
 		});
-		
+
 		// Listen for skeleton change events - trigger frame send
 		this.addEventListener('skeletonchanged', (event) => {
 			this.handleChangeEvent('skeleton');
 		});
-		
-		// Start webcam immediately for visualization (doesn't require Gemini API)
-		this.startWebcam();
+
+		// Start webcam and WAIT for it to complete before returning
+		await this.startWebcam();
 	}
 
 	start() {
@@ -179,10 +179,12 @@ Remember: Return ONLY the JSON object. No other text.`
 							}
 						}
 
-						// Wait for session to fully initialize
-						// The SDK needs time to process the initial connection
-						setTimeout(() => {
+						// Wait for video to be ready before enabling recording
+						this.waitForVideoReady().then(() => {
 							this.setupComplete = true;
+							if (this.verboseLogging) {
+								console.log('[CAM] SETUP COMPLETE');
+							}
 							// Webcam is already started in init() for visualization
 							// Enable recording - frames will be sent on face/skeleton change events
 							if (this.video) {
@@ -190,8 +192,22 @@ Remember: Return ONLY the JSON object. No other text.`
 								if (this.verboseLogging) {
 									console.log('[CAM] Ready to send frames to Gemini on face/skeleton changes');
 								}
+							} else {
+								// Race condition: video disappeared after waitForVideoReady() succeeded
+								console.error('[CAM] RACE CONDITION: NO VIDEO after waitForVideoReady() succeeded', {
+									videoExists: !!this.video,
+									setupComplete: this.setupComplete,
+									mediaStreamExists: !!this.mediaStream
+								});
 							}
-						}, 500);
+						}).catch((error) => {
+							console.error('[CAM] RACE CONDITION: Error waiting for video:', error.message, {
+								error: error,
+								videoExists: !!this.video,
+								mediaStreamExists: !!this.mediaStream,
+								setupComplete: this.setupComplete
+							});
+						});
 					},
 					onmessage: async (message) => {
 						if (this.verboseLogging) {
@@ -246,7 +262,7 @@ Remember: Return ONLY the JSON object. No other text.`
 			this.video.srcObject = this.mediaStream;
 			this.video.playsInline = true;
 			this.video.muted = true;
-			
+
 			// Wait for video metadata to load before getting dimensions
 			await new Promise((resolve) => {
 				this.video.onloadedmetadata = () => {
@@ -259,7 +275,7 @@ Remember: Return ONLY the JSON object. No other text.`
 					resolve();
 				};
 			});
-			
+
 			await this.video.play();
 
 			// Initialize skeletal tracking module
@@ -336,26 +352,26 @@ Remember: Return ONLY the JSON object. No other text.`
 		}
 
 		// Check if video is ready
-		if (this.video.readyState === this.video.HAVE_ENOUGH_DATA && 
-		    this.video.videoWidth > 0 && this.video.videoHeight > 0) {
-			
+		if (this.video.readyState === this.video.HAVE_ENOUGH_DATA &&
+			this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+
 			// Draw current video frame to canvas
 			this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
-			
+
 			// Process faces in the frame (async, don't wait)
 			if (this.face && this.face.faceRecognitionReady) {
 				this.face.processFaces().catch(err => {
 					console.error('[FACE] Error in face processing:', err);
 				});
 			}
-			
+
 			// Convert canvas to base64 JPEG
 			try {
 				const imageData = this.canvas.toDataURL('image/jpeg', 0.85);
 				// Remove data URL prefix (data:image/jpeg;base64,) - optimize by finding comma index
 				const commaIndex = imageData.indexOf(',');
 				const base64Data = commaIndex >= 0 ? imageData.substring(commaIndex + 1) : imageData;
-				
+
 				this.frameCount++;
 				// Create new object (API requires separate objects, can't reuse)
 				this.pendingFrames.push({
@@ -364,7 +380,7 @@ Remember: Return ONLY the JSON object. No other text.`
 						mimeType: 'image/jpeg'
 					}
 				});
-				
+
 				// After collecting enough frames, send them via sendClientContent
 				if (this.frameCount >= this.framesPerTurn) {
 					try {
@@ -376,10 +392,10 @@ Remember: Return ONLY the JSON object. No other text.`
 							}],
 							turnComplete: true
 						});
-						
+
 						// Update last send time for cooldown
 						this.lastFrameSendTime = Date.now();
-						
+
 						// Reuse array by clearing instead of recreating
 						this.pendingFrames.length = 0;
 						this.frameCount = 0;
@@ -458,10 +474,10 @@ Remember: Return ONLY the JSON object. No other text.`
 				this.currentTurnActive = false;
 
 				// Join accumulated text parts (single allocation instead of multiple concatenations)
-				const accumulatedText = this.accumulatedTextParts.length > 0 
-					? this.accumulatedTextParts.join('') 
+				const accumulatedText = this.accumulatedTextParts.length > 0
+					? this.accumulatedTextParts.join('')
 					: '';
-				
+
 				if (this.verboseLogging) {
 					console.log('[CAM.GEMINI] Turn complete - processing full response');
 					console.log('[CAM.GEMINI] Accumulated text so far:', accumulatedText);
@@ -501,7 +517,7 @@ Remember: Return ONLY the JSON object. No other text.`
 	parseResponse(text) {
 		// Cache trimmed text to avoid multiple trim() calls
 		const trimmedText = text.trim();
-		
+
 		try {
 			// Try to parse as JSON first
 			let jsonData;
@@ -538,8 +554,8 @@ Remember: Return ONLY the JSON object. No other text.`
 					if (analysisObj.sentiment?.overall) this.reusablePartsArray.push(`Sentiment: ${analysisObj.sentiment.overall}`);
 					if (analysisObj.tone) this.reusablePartsArray.push(`Tone: ${analysisObj.tone}`);
 					if (analysisObj.emotion_detected) this.reusablePartsArray.push(`Emotion: ${analysisObj.emotion_detected}`);
-					analysis = this.reusablePartsArray.length > 0 
-						? this.reusablePartsArray.join('. ') 
+					analysis = this.reusablePartsArray.length > 0
+						? this.reusablePartsArray.join('. ')
 						: JSON.stringify(analysisObj);
 				}
 			}
@@ -640,7 +656,7 @@ Remember: Return ONLY the JSON object. No other text.`
 		return text.replace(this.regexPatterns.toneRemove, '')
 			.replace(this.regexPatterns.emojiRemove, '')
 			.trim();
-	}	
+	}
 
 	extractEmoji(text) {
 		// Try to extract emoji from "Emoji: X" pattern (use cached regex)
@@ -699,6 +715,49 @@ Remember: Return ONLY the JSON object. No other text.`
 	// Set verbose logging flag
 	setVerboseLogging(enabled) {
 		this.verboseLogging = enabled;
+	}
+
+	// Wait for video to be ready before enabling recording
+	async waitForVideoReady() {
+		const maxWaitTime = 5000; // 5 seconds max wait
+		const checkInterval = 100; // Check every 100ms
+		const startTime = Date.now();
+
+		console.log('[CAM] Waiting for video to be ready...', {
+			videoExists: !!this.video,
+			videoReadyState: this.video?.readyState,
+			videoWidth: this.video?.videoWidth,
+			videoHeight: this.video?.videoHeight
+		});
+
+		while (Date.now() - startTime < maxWaitTime) {
+			if (this.video && 
+				this.video.readyState >= this.video.HAVE_METADATA &&
+				this.video.videoWidth > 0 && 
+				this.video.videoHeight > 0) {
+				if (this.verboseLogging) {
+					console.log('[CAM] Video is ready');
+				}
+				return;
+			}
+			await new Promise(resolve => setTimeout(resolve, checkInterval));
+		}
+
+		// Race condition detected - log detailed state
+		const elapsed = Date.now() - startTime;
+		console.error('[CAM] RACE CONDITION: Video not ready within timeout period', {
+			elapsedMs: elapsed,
+			videoExists: !!this.video,
+			videoReadyState: this.video?.readyState,
+			videoWidth: this.video?.videoWidth,
+			videoHeight: this.video?.videoHeight,
+			mediaStreamExists: !!this.mediaStream,
+			mediaStreamActive: this.mediaStream?.active,
+			setupComplete: this.setupComplete,
+			isRecording: this.isRecording
+		});
+
+		throw new Error('Video not ready within timeout period');
 	}
 
 	disconnect() {

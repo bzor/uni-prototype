@@ -38,6 +38,16 @@ npm run build:mic-vis
 ```
 Builds `mic-vis.js` to `host/mic-vis.js`.
 
+```bash
+npm run build:lighting-vis
+```
+Builds `lighting-vis.js` to `host/lighting-vis.js`.
+
+```bash
+npm run build:kinetic-vis
+```
+Builds `kinetic-vis.js` to `host/kinetic-vis.js`.
+
 ## Preview
 
 ```bash
