@@ -1,3 +1,6 @@
+
+//NOTE(kc): I tried Gemini Live Audio to Audio as a way to do a "conversational" mode, and run the audio that comes back through some effects so it's not legible. Bit of a fail on a few levels.
+
 // Gemini Live Audio Module - Handles WebSocket connection, audio processing, and audio playback
 import { GoogleGenAI, Modality } from '@google/genai';
 

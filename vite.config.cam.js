@@ -7,7 +7,7 @@ export default defineConfig({
     assetsDir: 'assets',
     emptyOutDir: false, // Preserve index.html and other files in /host
     lib: {
-      entry: resolve(__dirname, 'cam-bundle.js'),
+      entry: resolve(__dirname, 'cam.js'),
       name: 'Cam',
       fileName: () => 'cam.js',
       formats: ['es'],

@@ -16,20 +16,23 @@ export class LightingVis {
 		
 		// Constants
 		this.TWO_PI = Math.PI * 2;
-		this.bgFillStyle = '#dadfe0';
+		this.bgFillStyle = '#1a1a1a';
 		this.patternOptions = ["IDLE", "SMOOTH_WAVES", "CIRCULSAR_PULSE", "HECTIC_NOISE"];
-		//-1 to 1
-		this.speed = 0.4;
-		this.color = 0xff00ff;
-		this.pattern = "IDLE";
 		
-		// Transition state
+		// Current displayed state (what's actually shown)
+		this.currentSpeed = 0.4;
+		this.currentColor = 0xcdcdcd;
+		this.currentPattern = "IDLE";
+		
+		// Target state (what we're transitioning to)
+		this.targetSpeed = 0.4;
+		this.targetColor = 0xcdcdcd;
+		this.targetPattern = "IDLE";
+		
+		// Transition state - blend factor smoothly moves from 0 to 1
 		this.transitionDuration = 1000; // milliseconds
 		this.transitionStartTime = null;
-		this.prevColor = this.color;
-		this.prevPattern = this.pattern;
-		this.prevSpeed = this.speed;
-		this.isTransitioning = false;
+		this.blendFactor = 0; // 0 = current, 1 = target
 	}
 
 	resizeCanvas() {
@@ -87,132 +90,150 @@ export class LightingVis {
 
 		// Clear canvas
 		this.ctx.fillStyle = this.bgFillStyle;
-		this.ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+		this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-		// Draw 32x32 grid of circles in a square (5/6 of canvas height)
-		const gridSize = 32;
+		// Draw 16x16 grid of circles in a square (5/6 of canvas height)
+		const gridSize = 16;
 		const gridSide = canvasHeight * 0.9;
 		const cellSize = gridSide / gridSize;
 		const offsetX = (canvasWidth - gridSide) * 0.5;
 		const offsetY = (canvasHeight - gridSide) * 0.5;
 		
-		// Check if we're transitioning
-		let transitionProgress = 0;
-		if (this.isTransitioning && this.transitionStartTime !== null) {
+		// Update blend factor smoothly
+		if (this.transitionStartTime !== null) {
 			const elapsed = Date.now() - this.transitionStartTime;
-			transitionProgress = Math.min(1, elapsed / this.transitionDuration);
+			let rawProgress = Math.min(1, elapsed / this.transitionDuration);
 			
 			// Ease-in-out function for smooth transition
-			transitionProgress = transitionProgress < 0.5
-				? 2 * transitionProgress * transitionProgress
-				: 1 - Math.pow(-2 * transitionProgress + 2, 2) / 2;
+			rawProgress = rawProgress < 0.5
+				? 2 * rawProgress * rawProgress
+				: 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
 			
-			if (transitionProgress >= 1) {
-				this.isTransitioning = false;
+			this.blendFactor = rawProgress;
+			
+			// When transition completes, snap current to target and reset
+			if (rawProgress >= 1) {
+				this.currentSpeed = this.targetSpeed;
+				this.currentColor = this.targetColor;
+				this.currentPattern = this.targetPattern;
+				this.blendFactor = 0;
 				this.transitionStartTime = null;
 			}
 		}
 		
-		// Keep speed constant during transition to avoid frequency jumps
-		// Only apply new speed after transition completes
-		const currentSpeed = this.isTransitioning ? this.prevSpeed : this.speed;
-		const time = Date.now() * 0.001 * currentSpeed;
+		// Calculate time for both current and target states
+		// Both patterns run continuously, we just blend their outputs
+		const now = Date.now() * 0.001;
+		const currentTime = now * this.currentSpeed;
+		const targetTime = now * this.targetSpeed;
+		
+		// Always blend between current and target states
+		// Both patterns are always running, we just interpolate their outputs
+		this.drawBlendedPatterns(
+			this.currentPattern, this.targetPattern,
+			this.currentColor, this.targetColor,
+			currentTime, targetTime,
+			gridSize, cellSize, offsetX, offsetY,
+			this.blendFactor
+		);
+	}
+	
+	drawBlendedPatterns(currentPattern, targetPattern, currentColor, targetColor,
+		currentTime, targetTime, gridSize, cellSize, offsetX, offsetY, blendFactor) {
+		// Both patterns run continuously with their own time values
+		// We blend their outputs smoothly - no phase discontinuities
+		
+		// Extract color components
+		const currR = (currentColor >> 16) & 0xff;
+		const currG = (currentColor >> 8) & 0xff;
+		const currB = currentColor & 0xff;
+		const targR = (targetColor >> 16) & 0xff;
+		const targG = (targetColor >> 8) & 0xff;
+		const targB = targetColor & 0xff;
 		
 		// Interpolate color
-		const prevR = (this.prevColor >> 16) & 0xff;
-		const prevG = (this.prevColor >> 8) & 0xff;
-		const prevB = this.prevColor & 0xff;
-		const currR = (this.color >> 16) & 0xff;
-		const currG = (this.color >> 8) & 0xff;
-		const currB = this.color & 0xff;
+		const r = Math.round(currR + (targR - currR) * blendFactor);
+		const g = Math.round(currG + (targG - currG) * blendFactor);
+		const b = Math.round(currB + (targB - currB) * blendFactor);
 		
-		const r = this.isTransitioning
-			? Math.round(prevR + (currR - prevR) * transitionProgress)
-			: currR;
-		const g = this.isTransitioning
-			? Math.round(prevG + (currG - prevG) * transitionProgress)
-			: currG;
-		const b = this.isTransitioning
-			? Math.round(prevB + (currB - prevB) * transitionProgress)
-			: currB;
+		// Calculate visual properties for both patterns and interpolate
+		const centerX = gridSize * 0.5;
+		const centerY = gridSize * 0.5;
 		
-		// Handle pattern transition by blending between patterns
-		if (this.isTransitioning && this.prevPattern !== this.pattern) {
-			this.drawPatternBlend(
-				this.prevPattern, this.pattern,
-				prevR, prevG, prevB, currR, currG, currB,
-				gridSize, cellSize, offsetX, offsetY, time,
-				transitionProgress
-			);
-		} else {
-			// Route to pattern-specific drawing function
-			switch (this.pattern) {
-				case "IDLE":
-					this.drawIdle(r, g, b, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "SMOOTH_WAVES":
-					this.drawSmoothWaves(r, g, b, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "CIRCULSAR_PULSE":
-					this.drawCircularPulse(r, g, b, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "HECTIC_NOISE":
-					this.drawHecticNoise(r, g, b, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				default:
-					this.drawIdle(r, g, b, gridSize, cellSize, offsetX, offsetY, time);
+		for (let row = 0; row < gridSize; row++) {
+			for (let col = 0; col < gridSize; col++) {
+				const x = offsetX + (col + 0.5) * cellSize;
+				const y = offsetY + (row + 0.5) * cellSize;
+				
+				// Calculate values for current pattern (using currentTime)
+				const currentValues = this.calculatePatternValues(
+					currentPattern, row, col, centerX, centerY, cellSize, currentTime
+				);
+				
+				// Calculate values for target pattern (using targetTime)
+				const targetValues = this.calculatePatternValues(
+					targetPattern, row, col, centerX, centerY, cellSize, targetTime
+				);
+				
+				// Interpolate radius and alpha
+				const radius = currentValues.radius + (targetValues.radius - currentValues.radius) * blendFactor;
+				const alpha = currentValues.alpha + (targetValues.alpha - currentValues.alpha) * blendFactor;
+				
+				// Draw with interpolated values
+				this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+				this.ctx.beginPath();
+				this.ctx.arc(x, y, radius, 0, this.TWO_PI);
+				this.ctx.fill();
 			}
 		}
 	}
 	
-	drawPatternBlend(prevPattern, currPattern, prevR, prevG, prevB, currR, currG, currB,
-		gridSize, cellSize, offsetX, offsetY, time, blendFactor) {
-		// Draw both patterns and blend them
-		// Use a temporary canvas or draw with adjusted alpha
-		// For simplicity, we'll draw the old pattern with reduced alpha, then the new pattern
+	calculatePatternValues(pattern, row, col, centerX, centerY, cellSize, time) {
+		// Calculate radius and alpha for a specific pattern at a specific time
+		let radius = 0;
+		let alpha = 0;
 		
-		// Draw previous pattern with fade-out
-		const prevAlpha = 1 - blendFactor;
-		if (prevAlpha > 0.01) {
-			this.ctx.globalAlpha = prevAlpha;
-			switch (prevPattern) {
-				case "IDLE":
-					this.drawIdle(prevR, prevG, prevB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "SMOOTH_WAVES":
-					this.drawSmoothWaves(prevR, prevG, prevB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "CIRCULSAR_PULSE":
-					this.drawCircularPulse(prevR, prevG, prevB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "HECTIC_NOISE":
-					this.drawHecticNoise(prevR, prevG, prevB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
+		switch (pattern) {
+			case "IDLE": {
+				radius = cellSize * 0.3 + Math.sin(time * 1.2) * 0.2;
+				alpha = 0.6 + Math.sin(time * 0.3) * 0.1;
+				break;
+			}
+			case "SMOOTH_WAVES": {
+				const wave1 = Math.sin(time * 2 + col * 0.2);
+				const wave2 = Math.sin(time * 1.5 + row * 0.2);
+				const wave3 = Math.sin(time * 1.8 + (row + col) * 0.15);
+				const waveValue = (wave1 + wave2 + wave3) / 3;
+				radius = Math.max(0.1, (cellSize * 0.2) + waveValue * (cellSize * 0.3));
+				alpha = 0.5 + waveValue * 0.4;
+				break;
+			}
+			case "CIRCULSAR_PULSE": {
+				const dx = col - centerX;
+				const dy = row - centerY;
+				const dist = Math.sqrt(dx * dx + dy * dy);
+				const pulse = Math.sin(time * 3 - dist * 0.3);
+				const pulse2 = Math.sin(time * 2.5 - dist * 0.25);
+				const pulseValue = (pulse + pulse2) / 2;
+				radius = Math.max(0.1, (cellSize * 0.2) + pulseValue * (cellSize * 0.2));
+				alpha = 0.4 + pulseValue * 0.5;
+				break;
+			}
+			case "HECTIC_NOISE": {
+				const noise1 = Math.sin(time * 5 + row * 0.7 + col * 0.3);
+				const noise2 = Math.sin(time * 7 + row * 0.4 + col * 0.8);
+				const noise3 = Math.sin(time * 11 + row * 0.9 + col * 0.2);
+				const noise4 = Math.sin(time * 13 + row * 0.3 + col * 0.6);
+				const posHash = (row * 17 + col * 23) % 100 / 100;
+				const noiseValue = (noise1 + noise2 * 0.7 + noise3 * 0.5 + noise4 * 0.3) / 2.5;
+				const chaoticValue = noiseValue + (posHash - 0.5) * 0.3;
+				radius = Math.max(0.1, (cellSize * 0.15) + chaoticValue * (cellSize * 0.35));
+				alpha = 0.3 + Math.abs(chaoticValue) * 0.6;
+				break;
 			}
 		}
 		
-		// Draw current pattern with fade-in
-		const currAlpha = blendFactor;
-		if (currAlpha > 0.01) {
-			this.ctx.globalAlpha = currAlpha;
-			switch (currPattern) {
-				case "IDLE":
-					this.drawIdle(currR, currG, currB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "SMOOTH_WAVES":
-					this.drawSmoothWaves(currR, currG, currB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "CIRCULSAR_PULSE":
-					this.drawCircularPulse(currR, currG, currB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-				case "HECTIC_NOISE":
-					this.drawHecticNoise(currR, currG, currB, gridSize, cellSize, offsetX, offsetY, time);
-					break;
-			}
-		}
-		
-		// Reset global alpha
-		this.ctx.globalAlpha = 1.0;
+		return { radius, alpha };
 	}
 
 	drawIdle(r, g, b, gridSize, cellSize, offsetX, offsetY, time) {
@@ -223,7 +244,7 @@ export class LightingVis {
 				const y = offsetY + (row + 0.5) * cellSize;
 				
 				// Very subtle animation - slow breathing effect
-				const radius = cellSize * 0.35;
+				const radius = cellSize * 0.3 + Math.sin(time * 1.2) * 0.2;
 				const alpha = 0.6 + Math.sin(time * 0.3) * 0.1;
 				
 				this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -249,7 +270,7 @@ export class LightingVis {
 				// Combine waves for smooth, flowing effect
 				const waveValue = (wave1 + wave2 + wave3) / 3;
 				
-				const radius = Math.max(0.1, (cellSize * 0.25) + waveValue * (cellSize * 0.15));
+				const radius = Math.max(0.1, (cellSize * 0.2) + waveValue * (cellSize * 0.3));
 				const alpha = 0.5 + waveValue * 0.4;
 				
 				this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -311,7 +332,7 @@ export class LightingVis {
 				const noiseValue = (noise1 + noise2 * 0.7 + noise3 * 0.5 + noise4 * 0.3) / 2.5;
 				const chaoticValue = noiseValue + (posHash - 0.5) * 0.3;
 				
-				const radius = Math.max(0.1, (cellSize * 0.2) + chaoticValue * (cellSize * 0.25));
+				const radius = Math.max(0.1, (cellSize * 0.15) + chaoticValue * (cellSize * 0.35));
 				const alpha = 0.3 + Math.abs(chaoticValue) * 0.6;
 				
 				this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -346,32 +367,30 @@ export class LightingVis {
 	}
 
 	setAnimation(color, pattern, speed) {
-		// Store previous values for transition
-		if (color !== undefined && color !== this.color) {
-			this.prevColor = this.color;
-			this.color = color;
-			this.isTransitioning = true;
+		// Update target values - these are what we're transitioning towards
+		let needsTransition = false;
+		
+		if (color !== undefined && color !== this.targetColor) {
+			this.targetColor = color;
+			needsTransition = true;
 		}
-		if (pattern !== undefined && pattern !== this.pattern) {
-			this.prevPattern = this.pattern;
-			this.pattern = pattern;
-			this.isTransitioning = true;
+		if (pattern !== undefined && pattern !== this.targetPattern) {
+			this.targetPattern = pattern;
+			needsTransition = true;
 		}
-		// Speed changes are applied immediately after visual transition completes
-		// Store it but don't trigger visual transition
-		if (speed !== undefined && speed !== this.speed) {
-			this.prevSpeed = this.speed;
-			this.speed = speed;
-			// Only start transition if we don't already have one for color/pattern
-			if (!this.isTransitioning) {
-				this.isTransitioning = true;
-			}
+		if (speed !== undefined && speed !== this.targetSpeed) {
+			this.targetSpeed = speed;
+			needsTransition = true;
 		}
 		
-		// Start transition timer
-		if (this.isTransitioning) {
+		// If we're already transitioning and target changed, continue from current blend
+		// If we're not transitioning and target changed, start a new transition
+		if (needsTransition && this.transitionStartTime === null) {
+			// New transition - start from current state
 			this.transitionStartTime = Date.now();
+			this.blendFactor = 0;
 		}
+		// If already transitioning, just update targets and let it continue
 	}
 }
 

@@ -43,9 +43,9 @@ export class CamVis {
 		// Cached style strings
 		this.fontString = '10px "Courier New", Courier, monospace';
 		this.strokeStyleBlack = 'rgba(0, 0, 0, 0.1)';
-		this.fillStyleBlack = 'black';
-		this.fillStyleGray = '#555555';
-		this.bgFillStyle = '#dadfe0';
+		this.fillStyleBlack = 'white';
+		this.fillStyleGray = '#cdcdcd';
+		this.bgFillStyle = '#1a1a1a';
 		
 		// Reusable arrays for face data formatting (cleared each frame)
 		this.faceDataLines = [];
@@ -60,6 +60,12 @@ export class CamVis {
 		this.sensitivitySliderContainer = null;
 		this.skeletonSensitivitySlider = null;
 		this.skeletonSensitivitySliderContainer = null;
+		
+		// Video alpha animation
+		this.videoAlpha = 0.1; // Base faded state
+		this.fadeStartTime = 0;
+		this.fadeDuration = 1000; // 1 second fade duration
+		this.fadeAnimationFrameId = null;
 	}
 
 	resizeCanvas() {
@@ -108,6 +114,13 @@ export class CamVis {
 		});
 		this.resizeObserver.observe(this.container);
 
+		// Listen for frame sent events to trigger flash animation
+		if (this.cam) {
+			this.cam.addEventListener('framesent', () => {
+				this.flashVideoAlpha();
+			});
+		}
+
 		// Wait for video to be available, then start drawing
 		this.waitForVideoAndStart();
 	}
@@ -125,7 +138,7 @@ export class CamVis {
 		sliderContainer.style.gap = '8px';
 		sliderContainer.style.fontSize = '10px';
 		sliderContainer.style.fontFamily = '"Courier New", Courier, monospace';
-		sliderContainer.style.color = 'black';
+		sliderContainer.style.color = '#cdcdcd';
 		
 		// Create label
 		const label = document.createElement('span');
@@ -143,7 +156,7 @@ export class CamVis {
 		this.sensitivitySlider.style.width = '120px';
 		this.sensitivitySlider.style.height = '3px';
 		this.sensitivitySlider.style.cursor = 'pointer';
-		this.sensitivitySlider.style.accentColor = 'black';
+		this.sensitivitySlider.style.accentColor = '#cdcdcd';
 		
 		// Style slider track and thumb with CSS
 		const style = document.createElement('style');
@@ -154,24 +167,24 @@ export class CamVis {
 				background: transparent;
 			}
 			input[type="range"]::-webkit-slider-track {
-				background: #333333;
+				background: #cdcdcd;
 				height: 3px;
 			}
 			input[type="range"]::-webkit-slider-thumb {
 				-webkit-appearance: none;
 				appearance: none;
-				background: black;
+				background: #cdcdcd;
 				width: 6px;
 				height: 6px;
 				border-radius: 50%;
 				cursor: pointer;
 			}
 			input[type="range"]::-moz-range-track {
-				background: #333333;
+				background: #cdcdcd;
 				height: 3px;
 			}
 			input[type="range"]::-moz-range-thumb {
-				background: black;
+				background: #cdcdcd;
 				width: 6px;
 				height: 6px;
 				border-radius: 50%;
@@ -229,7 +242,7 @@ export class CamVis {
 		sliderContainer.style.gap = '8px';
 		sliderContainer.style.fontSize = '10px';
 		sliderContainer.style.fontFamily = '"Courier New", Courier, monospace';
-		sliderContainer.style.color = 'black';
+		sliderContainer.style.color = '#cdcdcd';
 		
 		// Create label
 		const label = document.createElement('span');
@@ -247,7 +260,7 @@ export class CamVis {
 		this.skeletonSensitivitySlider.style.width = '120px';
 		this.skeletonSensitivitySlider.style.height = '3px';
 		this.skeletonSensitivitySlider.style.cursor = 'pointer';
-		this.skeletonSensitivitySlider.style.accentColor = 'black';
+		this.skeletonSensitivitySlider.style.accentColor = '#cdcdcd';
 		
 		// Create value display
 		const valueDisplay = document.createElement('span');
@@ -335,7 +348,7 @@ export class CamVis {
 
 		// Clear canvas
 		this.ctx.fillStyle = this.bgFillStyle;
-		this.ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+		this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
 		// Cache video dimensions
 		const videoWidth = this.video.videoWidth;
@@ -380,7 +393,7 @@ export class CamVis {
 		// Draw webcam feed at reduced opacity in background (mirrored)
 		if (this.video.readyState === this.video.HAVE_ENOUGH_DATA) {
 			this.ctx.save();
-			this.ctx.globalAlpha = 0.2;
+			this.ctx.globalAlpha = this.videoAlpha;
 			this.ctx.drawImage(
 				this.video,
 				offsetX,
@@ -664,12 +677,48 @@ export class CamVis {
 	}
 
 
+	flashVideoAlpha() {
+		// Cancel any existing fade animation
+		if (this.fadeAnimationFrameId) {
+			cancelAnimationFrame(this.fadeAnimationFrameId);
+			this.fadeAnimationFrameId = null;
+		}
+
+		// Flash to full opacity immediately
+		this.videoAlpha = 1.0;
+		this.fadeStartTime = Date.now();
+
+		// Start fade animation
+		const fadeLoop = () => {
+			const elapsed = Date.now() - this.fadeStartTime;
+			const progress = Math.min(elapsed / this.fadeDuration, 1.0);
+
+			// Ease-out fade: start at 1.0, fade to 0.2
+			this.videoAlpha = 1.0 - (progress * (1.0 - 0.2));
+
+			if (progress < 1.0) {
+				this.fadeAnimationFrameId = requestAnimationFrame(fadeLoop);
+			} else {
+				// Ensure we end at exactly 0.2
+				this.videoAlpha = 0.2;
+				this.fadeAnimationFrameId = null;
+			}
+		};
+
+		this.fadeAnimationFrameId = requestAnimationFrame(fadeLoop);
+	}
+
 	disconnect() {
 		this.isVisualizing = false;
 
 		if (this.animationFrameId) {
 			cancelAnimationFrame(this.animationFrameId);
 			this.animationFrameId = null;
+		}
+
+		if (this.fadeAnimationFrameId) {
+			cancelAnimationFrame(this.fadeAnimationFrameId);
+			this.fadeAnimationFrameId = null;
 		}
 
 		if (this.resizeObserver) {

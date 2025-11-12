@@ -1,4 +1,4 @@
-class p {
+class C {
   constructor() {
     this.canvas = null, this.ctx = null, this.analyser = null, this.audioSource = null, this.dataArray = null, this.dataArrayHistory = null, this.animationFrameId = null, this.isVisualizing = !1, this.resizeObserver = null, this.lastTime = 0, this.fftSize = 32, this.historyLength = 64;
   }
@@ -28,10 +28,10 @@ class p {
   }
   connectAudioAnalysis() {
     try {
-      const t = this.mic.inputAudioContext, l = this.mic.mediaStream;
+      const t = this.mic.inputAudioContext, e = this.mic.mediaStream;
       this.analyser = t.createAnalyser(), this.analyser.fftSize = this.fftSize, this.analyser.smoothingTimeConstant = 0.5;
       const s = this.analyser.frequencyBinCount;
-      console.log("fft buffer length: " + this.analyser.frequencyBinCount), this.dataArray = new Uint8Array(s), this.dataArrayHistory = new Uint8Array(s * this.historyLength), this.audioSource = t.createMediaStreamSource(l), this.audioSource.connect(this.analyser), this.startVisualization();
+      console.log("fft buffer length: " + this.analyser.frequencyBinCount), this.dataArray = new Uint8Array(s), this.dataArrayHistory = new Uint8Array(s * this.historyLength), this.audioSource = t.createMediaStreamSource(e), this.audioSource.connect(this.analyser), this.startVisualization();
     } catch (t) {
       console.error("[MicVis] Error setting up audio analysis:", t);
     }
@@ -44,19 +44,19 @@ class p {
   }
   draw(t) {
     if (!this.isVisualizing || !this.analyser || !this.ctx) return;
-    Math.min((t - this.lastTime) * 1e-3, 0.1), this.lastTime = t, this.animationFrameId = requestAnimationFrame((i) => this.draw(i)), this.analyser.getByteFrequencyData(this.dataArray), this.ctx.fillStyle = "#dadfe0", this.ctx.globalCompositeOperation = "source-over", this.ctx.globalAlpha = 1, this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height), this.ctx.globalAlpha = 0.5, this.ctx.globalCompositeOperation = "overlay";
-    const l = 6, s = 8, d = this.historyLength, y = this.dataArray.length, f = this.canvas.height * 0.5 - l * 2;
-    for (let i = 0; i < y; i++) {
-      const m = i / (y - 1);
-      for (let a = 0; a < d; a++) {
-        const g = a / (d - 1), u = m * f * this.easeInOutSine(1 - g), v = this.dataArrayHistory[i + a * this.dataArray.length] / 255;
-        let e = s + this.canvasCenter.x + a * s, n = this.canvasCenter.y + u;
-        const r = v * s * 2, h = v * s * 4, o = r * 0.5, c = h * 0.5, x = m * 360;
-        this.ctx.fillStyle = `hsl(${x}, 100%, 50%)`, this.ctx.fillRect(e - o, n - c, r, h), n = this.canvasCenter.y - u, this.ctx.fillRect(e - o, n - c, r, h), e = this.canvasCenter.x - a * s, this.ctx.fillRect(e - o, n - c, r, h), e = this.canvasCenter.x - a * s, n = this.canvasCenter.y + u, this.ctx.fillRect(e - o, n - c, r, h);
+    Math.min((t - this.lastTime) * 1e-3, 0.1), this.lastTime = t, this.animationFrameId = requestAnimationFrame((i) => this.draw(i)), this.analyser.getByteFrequencyData(this.dataArray), this.ctx.fillStyle = "#1a1a1a", this.ctx.globalCompositeOperation = "source-over", this.ctx.globalAlpha = 1, this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height), this.ctx.globalAlpha = 0.5, this.ctx.globalCompositeOperation = "overlay";
+    const e = 6, s = 8, r = this.historyLength, a = this.dataArray.length, f = this.canvas.height * 0.5 - e * 2;
+    for (let i = 0; i < a; i++) {
+      const m = i / (a - 1);
+      for (let n = 0; n < r; n++) {
+        const A = n / (r - 1), d = m * f * this.easeInOutSine(1 - A), v = this.dataArrayHistory[i + n * this.dataArray.length] / 255;
+        let h = s + this.canvasCenter.x + n * s, o = this.canvasCenter.y + d;
+        const c = v * s * 2, l = v * s * 4, u = c * 0.5, y = l * 0.5;
+        this.ctx.fillStyle = this.heatMapColor(m), this.ctx.fillRect(h - u, o - y, c, l), o = this.canvasCenter.y - d, this.ctx.fillRect(h - u, o - y, c, l), h = this.canvasCenter.x - n * s, this.ctx.fillRect(h - u, o - y, c, l), h = this.canvasCenter.x - n * s, o = this.canvasCenter.y + d, this.ctx.fillRect(h - u, o - y, c, l);
       }
     }
-    const A = this.dataArrayHistory.length - this.dataArray.length;
-    for (let i = A; i >= 0; --i)
+    const g = this.dataArrayHistory.length - this.dataArray.length;
+    for (let i = g; i >= 0; --i)
       this.dataArrayHistory[i + this.dataArray.length] = this.dataArrayHistory[i];
     for (let i = 0; i < this.dataArray.length; i++)
       this.dataArrayHistory[i] = this.dataArray[i];
@@ -64,10 +64,21 @@ class p {
   easeInOutSine(t) {
     return (Math.cos(Math.PI * t) - 1) / 2;
   }
+  heatMapColor(t) {
+    let e, s, r;
+    if (t < 0.5) {
+      const a = t * 2;
+      e = 255, s = Math.floor(255 * (1 - a)), r = Math.floor(240 * (1 - a));
+    } else {
+      const a = (t - 0.5) * 2;
+      e = Math.floor(255 * (1 - a)), s = 0, r = Math.floor(255 * a);
+    }
+    return `rgb(${e}, ${s}, ${r})`;
+  }
   disconnect() {
     this.stopVisualization(), this.resizeObserver && (this.resizeObserver.disconnect(), this.resizeObserver = null), this.audioSource && (this.audioSource.disconnect(), this.audioSource = null), this.analyser && (this.analyser.disconnect(), this.analyser = null), this.canvas && this.container && this.canvas.parentNode === this.container && this.container.removeChild(this.canvas), this.canvas = null, this.ctx = null, this.dataArray = null;
   }
 }
 export {
-  p as MicVis
+  C as MicVis
 };

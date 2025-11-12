@@ -7,7 +7,7 @@ export default defineConfig({
     assetsDir: 'assets',
     emptyOutDir: false, // Preserve index.html and other files in /host
     lib: {
-      entry: resolve(__dirname, 'mic-vis-bundle.js'),
+      entry: resolve(__dirname, 'mic-vis.js'),
       name: 'MicVis',
       fileName: () => 'mic-vis.js',
       formats: ['es'],

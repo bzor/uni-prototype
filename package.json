@@ -13,6 +13,7 @@
     "build:mic-vis": "vite build --config vite.config.mic-vis.js",
     "build:lighting-vis": "vite build --config vite.config.lighting-vis.js",
     "build:kinetic-vis": "vite build --config vite.config.kinetic-vis.js",
+    "build:host": "npm run build:cam && npm run build:cam-vis && npm run build:mic && npm run build:mic-vis && npm run build:lighting-vis && npm run build:kinetic-vis",
     "deploy": "npm run build && node deploy.js"
   },
   "devDependencies": {

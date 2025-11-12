@@ -121,10 +121,10 @@ export class MicVis {
 		//fill frequency buffer
 		this.analyser.getByteFrequencyData(this.dataArray);
 
-		this.ctx.fillStyle = '#dadfe0';
+		this.ctx.fillStyle = '#1a1a1a';
 		this.ctx.globalCompositeOperation = "source-over";
 		this.ctx.globalAlpha = 1.0;
-		this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
 		this.ctx.globalAlpha = 0.5;
 		this.ctx.globalCompositeOperation = "overlay";
@@ -157,8 +157,7 @@ export class MicVis {
 				const hw = w * 0.5;
 				const hh = h * 0.5;
 
-				const hue = ty * 360;
-				this.ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+				this.ctx.fillStyle = this.heatMapColor(ty);
 				this.ctx.fillRect(x - hw, y - hh, w, h);
 
 				y = this.canvasCenter.y - yMax;
@@ -194,6 +193,27 @@ export class MicVis {
 
 	easeInOutSine(t) {
 		return ((Math.cos(Math.PI * t) - 1) / 2);
+	}
+
+	heatMapColor(t) {
+		// t: 0.0 -> light yellow (almost white), 0.5 -> red, 1.0 -> blue
+		let r, g, b;
+		
+		if (t < 0.5) {
+			// Interpolate from light yellow (255, 255, 240) to red (255, 0, 0)
+			const localT = t * 2.0; // 0 to 1 in this segment
+			r = 255;
+			g = Math.floor(255 * (1.0 - localT));
+			b = Math.floor(240 * (1.0 - localT));
+		} else {
+			// Interpolate from red (255, 0, 0) to blue (0, 0, 255)
+			const localT = (t - 0.5) * 2.0; // 0 to 1 in this segment
+			r = Math.floor(255 * (1.0 - localT));
+			g = 0;
+			b = Math.floor(255 * localT);
+		}
+		
+		return `rgb(${r}, ${g}, ${b})`;
 	}
 
 	disconnect() {

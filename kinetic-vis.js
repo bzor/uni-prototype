@@ -15,9 +15,18 @@ export class KineticVis {
 		
 		// Constants
 		this.TWO_PI = Math.PI * 2;
-		this.bgFillStyle = '#dadfe0';
+		this.bgFillStyle = '#1a1a1a';
 		this.patternOptions = ["IDLE", "HAPPY_BOUNCE", "SLOW_SWAY", "JIGGLE"];
 		this.pattern = "IDLE";
+		this.targetPattern = "IDLE";
+		
+		// Interpolation state
+		this.interpolationProgress = 1.0; // 0 = current, 1 = target
+		this.interpolationSpeed = 2.0; // units per second
+		this.lastFrameTime = null;
+		
+		// Colors array (will be set in init)
+		this.colors = null;
 	}
 
 	resizeCanvas() {
@@ -36,6 +45,14 @@ export class KineticVis {
 		}
 
 		this.container = config.container;
+
+		// Set colors array (fillColor, strokeColor for each pattern)
+		this.colors = config.colors || [
+			{ fill: '#3846ff', stroke: '#3846ff' }, // IDLE
+			{ fill: 'rgba(100, 200, 150, 0.8)', stroke: 'rgba(50, 150, 100, 0.9)' }, // HAPPY_BOUNCE
+			{ fill: '#f275c5', stroke: '#f275c5' }, // SLOW_SWAY
+			{ fill: '#fda834', stroke: 'rgba(150, 100, 50, 0.9)' }  // JIGGLE
+		];
 
 		// Create canvas element
 		this.canvas = document.createElement('canvas');
@@ -75,7 +92,7 @@ export class KineticVis {
 
 		// Clear canvas
 		this.ctx.fillStyle = this.bgFillStyle;
-		this.ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+		this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
 		const baseCenterX = canvasWidth * 0.5;
 		const baseCenterY = canvasHeight * 0.5;
@@ -83,95 +100,174 @@ export class KineticVis {
 		const baseRadiusY = baseRadiusX * 1.5; // Tall ellipse
 		const time = Date.now() * 0.001;
 
-		// Route to pattern-specific drawing function
-		switch (this.pattern) {
+		// Update interpolation progress with actual frame timing
+		const currentTime = performance.now() * 0.001;
+		if (this.lastFrameTime === null) {
+			this.lastFrameTime = currentTime;
+		}
+		const deltaTime = currentTime - this.lastFrameTime;
+		this.lastFrameTime = currentTime;
+
+		if (this.pattern !== this.targetPattern) {
+			this.interpolationProgress += this.interpolationSpeed * deltaTime;
+			if (this.interpolationProgress >= 1.0) {
+				this.interpolationProgress = 1.0;
+				this.pattern = this.targetPattern;
+			}
+		}
+
+		// Calculate states for all patterns
+		const currentState = this.getPatternState(this.pattern, baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
+		const targetState = this.getPatternState(this.targetPattern, baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
+
+		// Interpolate between states
+		const t = this.interpolationProgress;
+		const state = this.interpolateStates(currentState, targetState, t);
+
+		// Draw interpolated state
+		this.drawState(state);
+	}
+
+	getPatternState(pattern, centerX, centerY, radiusX, radiusY, time) {
+		const patternIndex = this.patternOptions.indexOf(pattern);
+		const color = this.colors && this.colors[patternIndex] 
+			? this.colors[patternIndex] 
+			: { fill: 'rgba(100, 150, 200, 0.8)', stroke: 'rgba(50, 100, 150, 0.9)' };
+
+		switch (pattern) {
 			case "IDLE":
-				this.drawIdle(baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
-				break;
+				return {
+					x: centerX,
+					y: centerY,
+					radiusX: radiusX,
+					radiusY: radiusY,
+					rotation: 0,
+					fillColor: color.fill,
+					strokeColor: color.stroke
+				};
 			case "HAPPY_BOUNCE":
-				this.drawHappyBounce(baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
-				break;
+				const bounce = Math.abs(Math.sin(time * 2));
+				const elasticBounce = Math.pow(bounce, 0.7);
+				const bounceOffset = -elasticBounce * (radiusY * 0.3);
+				const squash = 1 - (bounce * 0.2);
+				const stretchY = 1 + (bounce * 0.1);
+				return {
+					x: centerX,
+					y: centerY + bounceOffset,
+					radiusX: radiusX * squash,
+					radiusY: radiusY * stretchY,
+					rotation: 0,
+					fillColor: color.fill,
+					strokeColor: color.stroke
+				};
 			case "SLOW_SWAY":
-				this.drawSlowSway(baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
-				break;
+				const sway = Math.sin(time * 0.8);
+				const swayAmount = radiusX * 0.4;
+				const rotation = sway * 0.2;
+				return {
+					x: centerX + sway * swayAmount,
+					y: centerY,
+					radiusX: radiusX,
+					radiusY: radiusY,
+					rotation: rotation,
+					fillColor: color.fill,
+					strokeColor: color.stroke
+				};
 			case "JIGGLE":
-				this.drawJiggle(baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
-				break;
+				const timeMult = 0.4;
+				const jiggleX = (Math.sin(time * 8 * timeMult) + Math.sin(time * 11 * timeMult) * 0.5) * radiusX * 0.15;
+				const jiggleY = (Math.cos(time * 7 * timeMult) + Math.cos(time * 13 * timeMult) * 0.5) * radiusY * 0.15;
+				const jiggleRot = (Math.sin(time * 9 * timeMult) + Math.sin(time * 12 * timeMult) * 0.3) * 0.3;
+				const sizeVariation = 1 + Math.sin(time * 10) * 0.1;
+				return {
+					x: centerX + jiggleX,
+					y: centerY + jiggleY,
+					radiusX: radiusX * sizeVariation,
+					radiusY: radiusY * sizeVariation,
+					rotation: jiggleRot,
+					fillColor: color.fill,
+					strokeColor: color.stroke
+				};
 			default:
-				this.drawIdle(baseCenterX, baseCenterY, baseRadiusX, baseRadiusY, time);
+				return {
+					x: centerX,
+					y: centerY,
+					radiusX: radiusX,
+					radiusY: radiusY,
+					rotation: 0,
+					fillColor: color.fill,
+					strokeColor: color.stroke
+				};
 		}
 	}
 
-	drawIdle(centerX, centerY, radiusX, radiusY, time) {
-		// Static ellipse with minimal movement
-		this.ctx.fillStyle = 'rgba(100, 150, 200, 0.8)';
-		this.ctx.strokeStyle = 'rgba(50, 100, 150, 0.9)';
-		this.ctx.lineWidth = 2;
-
-		this.ctx.beginPath();
-		this.ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, this.TWO_PI);
-		this.ctx.fill();
-		//this.ctx.stroke();
+	parseColor(colorString) {
+		// Try rgba/rgb format first
+		const rgbaMatch = colorString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+		if (rgbaMatch) {
+			return {
+				r: parseInt(rgbaMatch[1]),
+				g: parseInt(rgbaMatch[2]),
+				b: parseInt(rgbaMatch[3]),
+				a: parseFloat(rgbaMatch[4] || '1.0')
+			};
+		}
+		
+		// Try hex format (#RGB or #RRGGBB)
+		const hexMatch = colorString.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+		if (hexMatch) {
+			let hex = hexMatch[1];
+			// Expand short hex (#RGB -> #RRGGBB)
+			if (hex.length === 3) {
+				hex = hex.split('').map(c => c + c).join('');
+			}
+			return {
+				r: parseInt(hex.substring(0, 2), 16),
+				g: parseInt(hex.substring(2, 4), 16),
+				b: parseInt(hex.substring(4, 6), 16),
+				a: 1.0
+			};
+		}
+		
+		// Default fallback
+		return { r: 100, g: 150, b: 200, a: 0.8 };
 	}
 
-	drawHappyBounce(centerX, centerY, radiusX, radiusY, time) {
-		// Bouncing up and down with elastic effect
-		const bounce = Math.abs(Math.sin(time * 2));
-		const elasticBounce = Math.pow(bounce, 0.7); // Ease-out effect
-		const bounceOffset = -elasticBounce * (radiusY * 0.3);
-		
-		const y = centerY + bounceOffset;
-		
-		// Slight squash when hitting bottom
-		const squash = 1 - (bounce * 0.2);
-		const stretchY = 1 + (bounce * 0.1);
-		
-		this.ctx.fillStyle = 'rgba(100, 200, 150, 0.8)';
-		this.ctx.strokeStyle = 'rgba(50, 150, 100, 0.9)';
-		this.ctx.lineWidth = 2;
-
-		this.ctx.beginPath();
-		this.ctx.ellipse(centerX, y, radiusX * squash, radiusY * stretchY, 0, 0, this.TWO_PI);
-		this.ctx.fill();
+	interpolateRgba(color1, color2, t) {
+		const c1 = this.parseColor(color1);
+		const c2 = this.parseColor(color2);
+		return `rgba(${Math.round(c1.r + (c2.r - c1.r) * t)}, ${Math.round(c1.g + (c2.g - c1.g) * t)}, ${Math.round(c1.b + (c2.b - c1.b) * t)}, ${c1.a + (c2.a - c1.a) * t})`;
 	}
 
-	drawSlowSway(centerX, centerY, radiusX, radiusY, time) {
-		// Slow side-to-side swaying motion
-		const sway = Math.sin(time * 0.8);
-		const swayAmount = radiusX * 0.4;
-		const x = centerX + sway * swayAmount;
-		
-		// Slight rotation based on sway
-		const rotation = sway * 0.2;
-
-		this.ctx.fillStyle = 'rgba(150, 150, 200, 0.8)';
-		this.ctx.strokeStyle = 'rgba(100, 100, 150, 0.9)';
-		this.ctx.lineWidth = 2;
-
-		this.ctx.beginPath();
-		this.ctx.ellipse(x, centerY, radiusX, radiusY, rotation, 0, this.TWO_PI);
-		this.ctx.fill();
+	interpolateStates(state1, state2, t) {
+		return {
+			x: state1.x + (state2.x - state1.x) * t,
+			y: state1.y + (state2.y - state1.y) * t,
+			radiusX: state1.radiusX + (state2.radiusX - state1.radiusX) * t,
+			radiusY: state1.radiusY + (state2.radiusY - state1.radiusY) * t,
+			rotation: state1.rotation + (state2.rotation - state1.rotation) * t,
+			fillColor: this.interpolateRgba(state1.fillColor, state2.fillColor, t),
+			strokeColor: this.interpolateRgba(state1.strokeColor, state2.strokeColor, t)
+		};
 	}
 
-	drawJiggle(centerX, centerY, radiusX, radiusY, time) {
-		// Fast, chaotic jiggling motion
-		const jiggleX = (Math.sin(time * 8) + Math.sin(time * 11) * 0.5) * radiusX * 0.15;
-		const jiggleY = (Math.cos(time * 7) + Math.cos(time * 13) * 0.5) * radiusY * 0.15;
-		const jiggleRot = (Math.sin(time * 9) + Math.sin(time * 12) * 0.3) * 0.3;
-		
-		const x = centerX + jiggleX;
-		const y = centerY + jiggleY;
-		
-		// Slight size variation
-		const sizeVariation = 1 + Math.sin(time * 10) * 0.1;
-
-		this.ctx.fillStyle = 'rgba(200, 150, 100, 0.8)';
-		this.ctx.strokeStyle = 'rgba(150, 100, 50, 0.9)';
+	drawState(state) {
+		this.ctx.fillStyle = state.fillColor;
+		this.ctx.strokeStyle = state.strokeColor;
 		this.ctx.lineWidth = 2;
 
+		this.ctx.globalAlpha = 1.0;
 		this.ctx.beginPath();
-		this.ctx.ellipse(x, y, radiusX * sizeVariation, radiusY * sizeVariation, jiggleRot, 0, this.TWO_PI);
+		this.ctx.ellipse(state.x, state.y, state.radiusX, state.radiusY, state.rotation, 0, this.TWO_PI);
 		this.ctx.fill();
+		this.ctx.globalAlpha = 0.6;
+		this.ctx.beginPath();
+		this.ctx.ellipse(state.x, state.y, state.radiusX * 1.1, state.radiusY * 1.1, state.rotation, 0, this.TWO_PI);
+		this.ctx.stroke();
+		this.ctx.globalAlpha = 0.1;
+		this.ctx.beginPath();
+		this.ctx.ellipse(state.x, state.y, state.radiusX * 1.2, state.radiusY * 1.2, state.rotation, 0, this.TWO_PI);
+		this.ctx.stroke();
 	}
 
 	disconnect() {
@@ -195,11 +291,16 @@ export class KineticVis {
 		this.ctx = null;
 		this.canvasWidth = 0;
 		this.canvasHeight = 0;
+		this.lastFrameTime = null;
 	}
 
 	setPattern(pattern) {
 		if (pattern !== undefined && this.patternOptions.includes(pattern)) {
-			this.pattern = pattern;
+			if (this.targetPattern !== pattern) {
+				// Reset interpolation when changing to a new pattern
+				this.interpolationProgress = 0.0;
+				this.targetPattern = pattern;
+			}
 		}
 	}
 }

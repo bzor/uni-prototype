@@ -393,6 +393,9 @@ Remember: Return ONLY the JSON object. No other text.`
 							turnComplete: true
 						});
 
+						// Emit frame sent event for visualizers
+						this.eventTarget.dispatchEvent(new CustomEvent('framesent'));
+
 						// Update last send time for cooldown
 						this.lastFrameSendTime = Date.now();
 

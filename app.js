@@ -6,8 +6,7 @@ import { MicAudioToText } from './mic-audio-to-text.js';
 import { MicVis } from './mic-vis.js';
 import { LightingVis } from './lighting-vis.js';
 import { KineticVis } from './kinetic-vis.js';
-
-const API_KEY = 'AIzaSyCp0Kwq06iQviKP81vfQLZAhouLCPU0eGk';
+import { API_KEY } from './config.js';
 
 const camOutput = document.getElementById('cam-output');
 const micOutput = document.getElementById('mic-output');
@@ -83,7 +82,7 @@ const testLightingAnimation = () => {
 		
 		//console.log(`[TEST] Setting lighting animation: color=0x${randomColor.toString(16)}, speed=${randomSpeed.toFixed(2)}, pattern=${randomLightingPattern}, kineticPattern=${randomKineticPattern}`);
 		lightingVis.setAnimation(randomColor, randomLightingPattern, randomSpeed);
-		kineticVis.setPatternStr("JIGGLE");
+		kineticVis.setPattern(randomKineticPattern);
 		
 		// Continue the loop
 		testLightingAnimation();

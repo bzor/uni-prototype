@@ -7,7 +7,7 @@ export default defineConfig({
     assetsDir: 'assets',
     emptyOutDir: false, // Preserve index.html and other files in /host
     lib: {
-      entry: resolve(__dirname, 'kinetic-vis-bundle.js'),
+      entry: resolve(__dirname, 'kinetic-vis.js'),
       name: 'KineticVis',
       fileName: () => 'kinetic-vis.js',
       formats: ['es'],

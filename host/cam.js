@@ -32059,7 +32059,7 @@ Remember: Return ONLY the JSON object. No other text.`
                 parts: this.pendingFrames
               }],
               turnComplete: !0
-            }), this.lastFrameSendTime = Date.now(), this.pendingFrames.length = 0, this.frameCount = 0;
+            }), this.eventTarget.dispatchEvent(new CustomEvent("framesent")), this.lastFrameSendTime = Date.now(), this.pendingFrames.length = 0, this.frameCount = 0;
           } catch (o) {
             console.error("[CAM] Error sending frames:", o), this.pendingFrames.length = 0, this.frameCount = 0, o.message && o.message.includes("CLOSED") && (this.isRecording = !1);
           }

@@ -7,7 +7,7 @@ export default defineConfig({
     assetsDir: 'assets',
     emptyOutDir: false, // Preserve index.html and other files in /host
     lib: {
-      entry: resolve(__dirname, 'lighting-vis-bundle.js'),
+      entry: resolve(__dirname, 'lighting-vis.js'),
       name: 'LightingVis',
       fileName: () => 'lighting-vis.js',
       formats: ['es'],
