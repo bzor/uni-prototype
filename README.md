@@ -62,24 +62,3 @@ Builds `lighting-vis.js` with all dependencies to `host/lighting-vis.js`.
 npm run build:kinetic-vis
 ```
 Builds `kinetic-vis.js` with all dependencies to `host/kinetic-vis.js`.
-
-## Preview
-
-```bash
-npm run preview
-```
-Preview the built application.
-
-## Host
-
-```bash
-npm run host
-```
-Serve the standalone host version from `/host` directory.
-
-## Deploy
-
-```bash
-npm run deploy
-```
-Build and deploy the application.
